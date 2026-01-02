@@ -178,8 +178,10 @@
                 // However, simple regex replace on the string is standard for this use case in Miro
                 let cleanContent = currentContent.replace(EMOJI_REGEX, '');
 
-                // Trim whitespace that might have been left behind
-                cleanContent = cleanContent.trim();
+                // Remove any trailing spaces that might have been left behind after emoji removal
+                // This handles both plain text and HTML-wrapped content
+                cleanContent = cleanContent.replace(/\s+(<\/p>)$/g, '$1'); // Remove spaces before closing </p> tag
+                cleanContent = cleanContent.replace(/\s+$/g, ''); // Remove trailing spaces in plain text
 
                 // Append new emoji if provided
                 let finalContent = cleanContent;

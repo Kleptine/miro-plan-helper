@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emoji Tagger</title>
+    <!-- Miro SDK -->
+    <script src="https://miro.com/app/static/sdk/v2/miro.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for the panel */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555; 
+        }
+        
+        .emoji-btn {
+            transition: transform 0.1s, background-color 0.2s;
+        }
+        .emoji-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body class="bg-white text-gray-800 font-sans">
+
+    <!-- Container handled by JS visibility -->
+    <div id="app-container" class="hidden p-4">
+        
+        <!-- Header -->
+        <div class="mb-4 text-center">
+            <h1 class="text-lg font-bold text-gray-900">Box Emoji Tagger</h1>
+            <p class="text-xs text-gray-500 mt-1">Select a box and click an emoji</p>
+        </div>
+
+        <!-- Status Indicator -->
+        <div id="status-msg" class="text-sm text-center mb-4 text-blue-600 font-medium">
+            Checking selection...
+        </div>
+
+        <!-- Emoji Grid -->
+        <div class="grid grid-cols-4 gap-2 mb-6">
+            <button class="emoji-btn text-2xl p-2 rounded hover:bg-gray-100 border border-transparent hover:border-gray-200" data-emoji="✅">✅</button>
+            <button class="emoji-btn text-2xl p-2 rounded hover:bg-gray-100 border border-transparent hover:border-gray-200" data-emoji="❌">❌</button>
+            <button class="emoji-btn text-2xl p-2 rounded hover:bg-gray-100 border border-transparent hover:border-gray-200" data-emoji="⚠️">⚠️</button>
+            <button class="emoji-btn text-2xl p-2 rounded hover:bg-gray-100 border border-transparent hover:border-gray-200" data-emoji="🚧">🚧</button>
+            
+            <button class="emoji-btn text-2xl p-2 rounded hover:bg-gray-100 border border-transparent hover:border-gray-200" data-emoji="🔥">🔥</button>
+            <button class="emoji-btn text-2xl p-2 rounded hover:bg-gray-100 border border-transparent hover:border-gray-200" data-emoji="💡">💡</button>
+            <button class="emoji-btn text-2xl p-2 rounded hover:bg-gray-100 border border-transparent hover:border-gray-200" data-emoji="⭐">⭐</button>
+            <button class="emoji-btn text-2xl p-2 rounded hover:bg-gray-100 border border-transparent hover:border-gray-200" data-emoji="👀">👀</button>
+
+            <button class="emoji-btn text-2xl p-2 rounded hover:bg-gray-100 border border-transparent hover:border-gray-200" data-emoji="🚀">🚀</button>
+            <button class="emoji-btn text-2xl p-2 rounded hover:bg-gray-100 border border-transparent hover:border-gray-200" data-emoji="🐛">🐛</button>
+            <button class="emoji-btn text-2xl p-2 rounded hover:bg-gray-100 border border-transparent hover:border-gray-200" data-emoji="🎨">🎨</button>
+            <button class="emoji-btn text-2xl p-2 rounded hover:bg-gray-100 border border-transparent hover:border-gray-200" data-emoji="📝">📝</button>
+        </div>
+
+        <!-- Actions -->
+        <div class="border-t pt-4">
+             <button id="clear-btn" class="w-full py-2 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-sm font-medium transition-colors">
+                Clear All Emojis
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Configuration ---
+        // Regex to match a wide range of Emojis (Emoji Presentation & Extended Pictographic)
+        const EMOJI_REGEX = /(\p{Emoji_Presentation}|\p{Extended_Pictographic})/gu;
+
+        // Supported widget types to modify
+        const SUPPORTED_TYPES = ['shape', 'sticky_note', 'text'];
+
+        async function init() {
+            // Check if we are running in the sidebar (Panel) or as the background "Headless" app
+            const params = new URLSearchParams(window.location.search);
+            const isPanel = params.has('panel');
+
+            if (isPanel) {
+                // --- PANEL MODE (UI) ---
+                document.getElementById('app-container').classList.remove('hidden');
+                setupPanelLogic();
+            } else {
+                // --- HEADLESS MODE (Background) ---
+                // This registers the app icon in the toolbar
+                await miro.board.ui.on('icon:click', async () => {
+                    await miro.board.ui.openPanel({
+                        url: '?panel=1', // Load self with panel param
+                        height: 460 // Standard height
+                    });
+                });
+            }
+        }
+
+        function setupPanelLogic() {
+            const statusMsg = document.getElementById('status-msg');
+            const clearBtn = document.getElementById('clear-btn');
+            const emojiBtns = document.querySelectorAll('.emoji-btn');
+
+            // 1. Listen for selection updates to update UI status
+            miro.board.ui.on('selection:update', async (event) => {
+                updateStatus(event.items);
+            });
+
+            // Initial check
+            miro.board.getSelection().then(updateStatus);
+
+            // 2. Handle Emoji Click
+            emojiBtns.forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const emoji = btn.dataset.emoji;
+                    await applyEmoji(emoji);
+                });
+            });
+
+            // 3. Handle Clear Click
+            clearBtn.addEventListener('click', async () => {
+                await applyEmoji(null); // null means clear only
+            });
+
+            async function updateStatus(items) {
+                const supportedItems = items.filter(i => SUPPORTED_TYPES.includes(i.type));
+                
+                if (items.length === 0) {
+                    statusMsg.textContent = "Select a box to start";
+                    statusMsg.className = "text-sm text-center mb-4 text-gray-400";
+                    toggleButtons(false);
+                } else if (supportedItems.length === 0) {
+                    statusMsg.textContent = "Selection not supported (Shapes/Stickies only)";
+                    statusMsg.className = "text-sm text-center mb-4 text-red-500";
+                    toggleButtons(false);
+                } else {
+                    statusMsg.textContent = `${supportedItems.length} item(s) selected`;
+                    statusMsg.className = "text-sm text-center mb-4 text-green-600 font-medium";
+                    toggleButtons(true);
+                }
+            }
+
+            function toggleButtons(enable) {
+                const opacity = enable ? '1' : '0.5';
+                const pointerEvents = enable ? 'auto' : 'none';
+                
+                document.querySelector('.grid').style.opacity = opacity;
+                document.querySelector('.grid').style.pointerEvents = pointerEvents;
+                clearBtn.style.opacity = opacity;
+                clearBtn.style.pointerEvents = pointerEvents;
+            }
+        }
+
+        async function applyEmoji(newEmoji) {
+            // Get current selection
+            const items = await miro.board.getSelection();
+            
+            // Filter for supported types
+            const supportedItems = items.filter(i => SUPPORTED_TYPES.includes(i.type));
+
+            if (supportedItems.length === 0) return;
+
+            // Process each item
+            for (const item of supportedItems) {
+                // Get current content (usually HTML or plain text)
+                let currentContent = item.content || "";
+
+                // Remove existing emojis using regex
+                // We use a replacer function to avoid stripping HTML tags that might look like emojis (unlikely but safe)
+                // However, simple regex replace on the string is standard for this use case in Miro
+                let cleanContent = currentContent.replace(EMOJI_REGEX, '');
+
+                // Trim whitespace that might have been left behind
+                cleanContent = cleanContent.trim();
+
+                // Append new emoji if provided
+                let finalContent = cleanContent;
+                if (newEmoji) {
+                    // Check if content is wrapped in HTML tags (Miro often wraps text in <p>)
+                    if (finalContent.endsWith('</p>')) {
+                        // Insert before the closing tag
+                        finalContent = finalContent.replace(/<\/p>$/, ` ${newEmoji}</p>`);
+                    } else {
+                        // Plain append
+                        finalContent = `${finalContent} ${newEmoji}`;
+                    }
+                }
+
+                // Update the item
+                item.content = finalContent;
+                
+                // Sync changes to board
+                try {
+                    await item.sync();
+                } catch (err) {
+                    console.error("Failed to sync item", err);
+                }
+            }
+        }
+
+        // Initialize the app
+        init();
+    </script>
+</body>
+</html>

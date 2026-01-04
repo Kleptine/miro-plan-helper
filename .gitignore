@@ -1,0 +1,7 @@
+# Downloaded PDFs and archives
+lostgarden_pdfs/
+lostgarden_articles.zip
+
+# Old/test scripts
+download_lostgarden.py
+download_lostgarden_playwright.py

@@ -102,6 +102,22 @@
             </button>
         </div>
 
+        <!-- Set Height Section -->
+        <div class="border-t pt-4 mb-4">
+            <h2 class="text-sm font-semibold text-gray-700 mb-2">Set Height</h2>
+            <p class="text-xs text-gray-500 mb-3">Set height of selected shapes</p>
+            <div class="flex gap-2 mb-3">
+                <input type="number" id="height-input" placeholder="Height (px)"
+                    class="flex-1 px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <button id="pick-height-btn" class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-sm font-medium transition-colors" title="Pick from selection">
+                    Pick
+                </button>
+            </div>
+            <button id="apply-height-btn" class="w-full py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded text-sm font-medium transition-colors">
+                Apply Height
+            </button>
+        </div>
+
         <!-- Actions -->
         <div class="border-t pt-4">
              <button id="clear-btn" class="w-full py-2 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-sm font-medium transition-colors">
@@ -153,7 +169,7 @@
                 await miro.board.ui.on('icon:click', async () => {
                     await miro.board.ui.openPanel({
                         url: '?panel=1', // Load self with panel param
-                        height: 580 // Extended height for color section
+                        height: 680 // Extended height for color and height sections
                     });
                 });
 
@@ -258,6 +274,32 @@
             // 3. Handle Clear Click
             clearBtn.addEventListener('click', async () => {
                 await applyEmoji(null); // null means clear only
+            });
+
+            // 4. Handle Set Height
+            const heightInput = document.getElementById('height-input');
+            const pickHeightBtn = document.getElementById('pick-height-btn');
+            const applyHeightBtn = document.getElementById('apply-height-btn');
+
+            pickHeightBtn.addEventListener('click', async () => {
+                const items = await miro.board.getSelection();
+                const shapes = items.filter(i => i.type === 'shape');
+                if (shapes.length > 0) {
+                    heightInput.value = Math.round(shapes[0].height);
+                }
+            });
+
+            applyHeightBtn.addEventListener('click', async () => {
+                const height = parseFloat(heightInput.value);
+                if (isNaN(height) || height <= 0) return;
+
+                const items = await miro.board.getSelection();
+                const shapes = items.filter(i => i.type === 'shape');
+
+                for (const shape of shapes) {
+                    shape.height = height;
+                    await shape.sync();
+                }
             });
 
             async function updateStatus(items) {

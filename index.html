@@ -401,17 +401,18 @@
             const base64 = btoa(svg);
             const dataUrl = `data:image/svg+xml;base64,${base64}`;
 
-            // Create image at same position as shape
-            // Note: Miro only allows setting width OR height, not both
-            // Since our SVG has the correct aspect ratio, width alone works
+            // Create image first (position will be set after)
             const bgImage = await miro.board.createImage({
                 url: dataUrl,
-                x: shape.x,
-                y: shape.y,
-                width: width,
                 title: STRIPE_BG_TITLE,
-                rotation: shape.rotation || 0,
             });
+
+            // Explicitly set position and size to match shape exactly
+            bgImage.x = shape.x;
+            bgImage.y = shape.y;
+            bgImage.width = width;
+            bgImage.rotation = shape.rotation || 0;
+            await bgImage.sync();
 
             // Make shape transparent so stripes show through
             shape.style.fillOpacity = 0;

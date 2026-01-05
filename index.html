@@ -400,12 +400,13 @@
             const dataUrl = `data:image/svg+xml;base64,${base64}`;
 
             // Create image at same position as shape
+            // Note: Miro only allows setting width OR height, not both
+            // Since our SVG has the correct aspect ratio, width alone works
             const bgImage = await miro.board.createImage({
                 url: dataUrl,
                 x: shape.x,
                 y: shape.y,
                 width: width,
-                height: height,
                 title: STRIPE_BG_TITLE,
                 rotation: shape.rotation || 0,
             });

@@ -169,20 +169,20 @@
                 // Only care about shapes
                 if (item.type !== 'shape') continue;
 
-                // Check if this shape is in one of our stripe groups
-                if (!item.parentId) continue;
+                // Check if this shape is in one of our stripe groups (use groupId, not parentId)
+                if (!item.groupId) continue;
 
                 try {
-                    const parent = await miro.board.getById(item.parentId);
-                    if (!parent || parent.type !== 'group') continue;
+                    const group = await miro.board.getById(item.groupId);
+                    if (!group || group.type !== 'group') continue;
 
-                    const isOurs = await isStripeGroup(parent);
+                    const isOurs = await isStripeGroup(group);
                     if (!isOurs) continue;
 
                     // Find the stripe image in the group and resize it to match the shape
-                    const groupItems = await parent.getItems();
+                    const groupItems = await group.getItems();
                     for (const groupItem of groupItems) {
-                        if (groupItem.type === 'image' && groupItem.url && groupItem.url.startsWith('data:image/svg+xml;base64,')) {
+                        if (groupItem.type === 'image') {
                             // Update image dimensions to match shape (stretching is fine)
                             groupItem.width = item.width;
                             groupItem.height = item.height;
@@ -358,19 +358,19 @@
 
             for (let shape of rectangles) {
                 try {
-                    // Check if shape is already in a group
-                    if (shape.parentId) {
+                    // Check if shape is already in a group (use groupId, NOT parentId - parentId is for frames)
+                    if (shape.groupId) {
                         // Check if it's our stripe group
-                        const parent = await miro.board.getById(shape.parentId);
-                        if (parent && parent.type === 'group') {
-                            const isOurGroup = await isStripeGroup(parent);
+                        const group = await miro.board.getById(shape.groupId);
+                        if (group && group.type === 'group') {
+                            const isOurGroup = await isStripeGroup(group);
                             if (!isOurGroup) {
                                 console.warn('Shape is in a user-created group, skipping:', shape.id);
                                 continue;
                             }
                             // It's our group - clean it up first
-                            await cleanupStripeGroup(parent);
-                            // Re-fetch shape after ungrouping (local object is stale)
+                            await cleanupStripeGroup(group);
+                            // Re-fetch shape after ungrouping (local object is stale, groupId now null)
                             shape = await miro.board.getById(shape.id);
                         }
                     }
@@ -401,14 +401,12 @@
         async function isStripeGroup(group) {
             try {
                 const items = await group.getItems();
+                // Our stripe groups have exactly 2 items: 1 image + 1 shape
                 if (items.length !== 2) return false;
 
-                // Identify our stripe images by their data URL pattern (more reliable than title)
-                const hasStripeImage = items.some(i =>
-                    i.type === 'image' && i.url && i.url.startsWith('data:image/svg+xml;base64,')
-                );
+                const hasImage = items.some(i => i.type === 'image');
                 const hasShape = items.some(i => i.type === 'shape');
-                return hasStripeImage && hasShape;
+                return hasImage && hasShape;
             } catch (err) {
                 return false;
             }
@@ -419,9 +417,9 @@
                 const items = await group.getItems();
                 await group.ungroup();
 
-                // Delete the stripe background image (identified by data URL pattern)
+                // Delete any images in the group (our stripe backgrounds)
                 for (const item of items) {
-                    if (item.type === 'image' && item.url && item.url.startsWith('data:image/svg+xml;base64,')) {
+                    if (item.type === 'image') {
                         await miro.board.remove(item);
                     }
                 }

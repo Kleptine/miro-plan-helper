@@ -298,7 +298,7 @@
                 .sort((a, b) => a - b)
                 .map(i => BG_COLORS[i]);
 
-            for (const shape of rectangles) {
+            for (let shape of rectangles) {
                 try {
                     // Check if shape is already in a group
                     if (shape.parentId) {
@@ -311,7 +311,9 @@
                                 continue;
                             }
                             // It's our group - clean it up first
-                            await cleanupStripeGroup(parent, shape);
+                            await cleanupStripeGroup(parent);
+                            // Re-fetch shape after ungrouping (local object is stale)
+                            shape = await miro.board.getById(shape.id);
                         }
                     }
 
@@ -348,7 +350,7 @@
             }
         }
 
-        async function cleanupStripeGroup(group, shape) {
+        async function cleanupStripeGroup(group) {
             try {
                 const items = await group.getItems();
                 await group.ungroup();

@@ -46,6 +46,14 @@
             border-color: #1a1a1a;
             box-shadow: 0 0 0 2px rgba(0,0,0,0.15);
         }
+        .color-toggle.transparent-toggle {
+            background-image: linear-gradient(45deg, #ccc 25%, transparent 25%),
+                              linear-gradient(-45deg, #ccc 25%, transparent 25%),
+                              linear-gradient(45deg, transparent 75%, #ccc 75%),
+                              linear-gradient(-45deg, transparent 75%, #ccc 75%);
+            background-size: 8px 8px;
+            background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+        }
     </style>
 </head>
 <body class="bg-white text-gray-800 font-sans">
@@ -113,12 +121,15 @@
 
         // Background colors (configurable) - order matters for stripes
         const BG_COLORS = [
-            '#FF6B6B', // Red
-            '#4ECDC4', // Teal
-            '#45B7D1', // Blue
-            '#96CEB4', // Green
-            '#FFEAA7', // Yellow
-            '#DDA0DD', // Plum
+            '#8FD14F', // Light green (0.561, 0.820, 0.310)
+            '#DEDAFF', // Pale lavender (0.870, 0.855, 1.000)
+            '#F8D3AF', // Peach (0.973, 0.828, 0.686)
+            '#C6DCFF', // Pale blue (0.776, 0.863, 1.000)
+            '#FFF6B9', // Pale yellow (1.000, 0.965, 0.726)
+            'transparent', // Clear (no color)
+            '#FFE600', // Golden yellow (Neon)
+            '#FF7F7F', // Coral/Salmon
+            '#7FDFDF', // Mint/Teal
         ];
 
         // Marker for our generated stripe backgrounds
@@ -159,7 +170,11 @@
             BG_COLORS.forEach((color, index) => {
                 const btn = document.createElement('button');
                 btn.className = 'color-toggle';
-                btn.style.backgroundColor = color;
+                if (color === 'transparent') {
+                    btn.classList.add('transparent-toggle');
+                } else {
+                    btn.style.backgroundColor = color;
+                }
                 btn.dataset.colorIndex = index;
                 btn.addEventListener('click', () => {
                     if (activeColors.has(index)) {
@@ -317,14 +332,17 @@
                         }
                     }
 
-                    // Apply based on number of colors
-                    if (selectedColors.length === 0) {
-                        // Transparent - just set fillOpacity to 0
+                    // Filter out transparent for counting visible colors
+                    const visibleColors = selectedColors.filter(c => c !== 'transparent');
+
+                    // Apply based on number of visible colors
+                    if (visibleColors.length === 0) {
+                        // No visible colors (none selected, or only transparent)
                         shape.style.fillOpacity = 0;
                         await shape.sync();
-                    } else if (selectedColors.length === 1) {
-                        // Single color - direct fillColor
-                        shape.style.fillColor = selectedColors[0];
+                    } else if (visibleColors.length === 1) {
+                        // Single visible color - direct fillColor
+                        shape.style.fillColor = visibleColors[0];
                         shape.style.fillOpacity = 1;
                         await shape.sync();
                     } else {
@@ -367,28 +385,32 @@
         }
 
         function generateStripeSvg(width, height, colors) {
-            const stripeWidth = Math.max(15, Math.min(width, height) / 8);
-            const diagonal = Math.sqrt(width * width + height * height);
-            // Extra coverage for rotated corners
-            const coverage = diagonal * 1.5;
-            const numStripes = Math.ceil(coverage * 2 / stripeWidth) + colors.length;
+            // Filter out transparent colors for stripe generation
+            const visibleColors = colors.filter(c => c !== 'transparent');
+            if (visibleColors.length === 0) return null;
 
+            // Stripe width scales with box size
+            const stripeWidth = Math.max(10, Math.min(width, height) / 10);
+            // Need enough stripes to cover from -height to width (diagonal coverage)
+            const totalLen = width + height;
+            const numStripes = Math.ceil(totalLen / stripeWidth) + visibleColors.length;
+
+            // Build diagonal stripes using parallelograms
+            // Each stripe runs from top-left to bottom-right at 45 degrees
             let stripes = '';
             for (let i = 0; i < numStripes; i++) {
-                const color = colors[i % colors.length];
-                const x = (i * stripeWidth) - coverage;
-                stripes += `<rect x="${x}" y="${-coverage}" width="${stripeWidth}" height="${coverage * 3}" fill="${color}" />`;
+                const color = visibleColors[i % visibleColors.length];
+                const x1 = i * stripeWidth - height;
+                const x2 = (i + 1) * stripeWidth - height;
+                // Parallelogram: top edge at y=0, bottom edge at y=height, shifted by height
+                stripes += `<polygon points="${x1},0 ${x2},0 ${x2 + height},${height} ${x1 + height},${height}" fill="${color}"/>`;
             }
 
             return `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
                 <defs>
-                    <clipPath id="clip">
-                        <rect x="0" y="0" width="${width}" height="${height}" />
-                    </clipPath>
+                    <clipPath id="c"><rect width="${width}" height="${height}"/></clipPath>
                 </defs>
-                <g clip-path="url(#clip)" transform="rotate(-45, ${width/2}, ${height/2})">
-                    ${stripes}
-                </g>
+                <g clip-path="url(#c)">${stripes}</g>
             </svg>`;
         }
 
@@ -423,6 +445,12 @@
 
             // Generate SVG
             const svg = generateStripeSvg(width, height, colors);
+            if (!svg) {
+                // Only transparent colors selected - just make shape transparent
+                shape.style.fillOpacity = 0;
+                await shape.sync();
+                return;
+            }
             const base64 = btoa(svg);
             const dataUrl = `data:image/svg+xml;base64,${base64}`;
 

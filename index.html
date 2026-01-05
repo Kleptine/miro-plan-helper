@@ -392,6 +392,31 @@
             </svg>`;
         }
 
+        // Convert frame-relative coordinates to absolute board coordinates
+        // Frame children have x/y relative to frame's top-left corner
+        // Board items have x/y relative to board center
+        async function getAbsoluteBoardCoords(item) {
+            if (!item.parentId) {
+                // Item is at board root - coordinates are already absolute
+                return { x: item.x, y: item.y };
+            }
+
+            // Item is inside a frame - convert from frame-relative to board coords
+            const parent = await miro.board.getById(item.parentId);
+            if (!parent) {
+                console.warn('Parent not found, using relative coords');
+                return { x: item.x, y: item.y };
+            }
+
+            // Frame's x/y is its CENTER in board coords
+            // Child's x/y is relative to frame's TOP-LEFT corner
+            // So: boardX = (frame.x - frame.width/2) + child.x
+            const boardX = (parent.x - parent.width / 2) + item.x;
+            const boardY = (parent.y - parent.height / 2) + item.y;
+
+            return { x: boardX, y: boardY };
+        }
+
         async function createStripedBackground(shape, colors) {
             const width = shape.width;
             const height = shape.height;
@@ -401,18 +426,18 @@
             const base64 = btoa(svg);
             const dataUrl = `data:image/svg+xml;base64,${base64}`;
 
-            // Create image first (position will be set after)
+            // Get absolute board coordinates for the shape
+            const absCoords = await getAbsoluteBoardCoords(shape);
+
+            // Create image at absolute board coordinates
             const bgImage = await miro.board.createImage({
                 url: dataUrl,
                 title: STRIPE_BG_TITLE,
+                x: absCoords.x,
+                y: absCoords.y,
+                width: width,
+                rotation: shape.rotation || 0,
             });
-
-            // Explicitly set position and size to match shape exactly
-            bgImage.x = shape.x;
-            bgImage.y = shape.y;
-            bgImage.width = width;
-            bgImage.rotation = shape.rotation || 0;
-            await bgImage.sync();
 
             // Make shape transparent so stripes show through
             shape.style.fillOpacity = 0;
